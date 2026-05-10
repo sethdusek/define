@@ -4,6 +4,7 @@ from sys import argv
 import optparse
 from os import system
 from os import path
+from os import environ
 import requests
 import subprocess
 import re
@@ -15,10 +16,10 @@ except SystemError:
     from __version__ import __version__
 
 regex = re.compile("^\d\.")
-key = "1e940957819058fe3ec7c59d43c09504b400110db7faa0509"
-tkey = "e415520c671c26518df498d8f4736cac"
-urbankey = "ub2JDDg9Iumsh1HfdO3a3HQbZi0up1qe8LkjsnWQvyVvQLFn1q"
-hyphenation = False  # Disable or Enable Hyphenation
+key = environ.get("WORDNIK_API_KEY", "")
+tkey = environ.get("THESAURUS_API_KEY", "")
+urbankey = environ.get("URBAN_DICTIONARY_API_KEY", "")
+hyphenation = False
 try:
     raw_input_ = raw_input
 except NameError:
@@ -83,9 +84,6 @@ class dict:
             return urb["list"][0]["definition"]
 
     def getThesaurus(self, word):
-        """response = requests.get("http://words.bighugelabs.com/api/2/%s/%s/json"
-                            % (self.tkey, word)).json()
-        return response"""
         response = requests.get(
             "http://api.wordnik.com:80/v4/word.json/%s/relatedWords?"
             "useCanonical=false&relationshipTypes=synonym&limitPer"
@@ -120,8 +118,9 @@ def which(program):
 
 def parse_hunspell(word):
     if not which("hunspell"):
-        raise MissingBinaryException("Hunspell is missing. Please install it to get spelling corrections.")
-    hunspell = subprocess.Popen("hunskell", stdout=subprocess.PIPE,
+        raise MissingBinaryException(
+            "Hunspell is missing. Please install it to get spelling corrections.")
+    hunspell = subprocess.Popen("hunspell", stdout=subprocess.PIPE,
                                 stdin=subprocess.PIPE)
     try:
         output = hunspell.communicate(input=bytes(word, "utf-8"))[0]
@@ -145,6 +144,8 @@ def getLocalWordnet(word):
             definitions.append(line[reg.end():].split("--")[1]
                                [2:len(line.split("--")[1]) - 1].split(";")[0])
     return definitions
+
+
 wn_exists = False
 if which("wn"):
     wn_exists = True
@@ -200,11 +201,12 @@ def play_definition(word, client):
         buff = open("/tmp/%s" % filen, "wb")
         buff.write(down)
         buff.close()
-        system("gst-launch-1.0 playbin uri=file:///tmp/%s -q" % filen)
+        command = "gst-launch-1.0 playbin uri=file:///tmp/%s -q" % filen
+        system(command)
         while True:
             ask = raw_input_("\nWould you like to hear it again? [y/N] ")
             if ask.lower().startswith("y"):
-                system("gst-launch-1.0 -q playbin uri=file:///tmp/%s" % filen)
+                system(command)
             else:
                 break
 
@@ -251,7 +253,8 @@ def print_wordnik_definition(word, client, source="all"):
     except:
         print("Not found")
         try:
-            print("Did you mean: " + ",".join(parse_hunspell(word)["suggestions"]))
+            print("Did you mean: " +
+                  ",".join(parse_hunspell(word)["suggestions"]))
         except MissingBinaryException as e:
             print(e)
 
@@ -267,7 +270,7 @@ def getLocalDefinition(word):
     output = output.communicate()[0]
     try:
         lines = str(output, encoding="utf-8").split("\n")
-    except TypeError:  # screw you python3
+    except TypeError:
         lines = output.split("\n")
     for i, v in enumerate(lines):
         if v.startswith("     "):
@@ -360,6 +363,7 @@ def main():
     check_args_valid(required_args)
     client = get_wordapi_client()
     print_each_definition(required_args, client, optional_args)
+
 
 if __name__ == "__main__":
     if __package__ is None:
